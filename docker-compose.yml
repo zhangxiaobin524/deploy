@@ -29,11 +29,6 @@ services:
       retries: 5
     networks:
       - fluent-life-network
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 1G
 
   # ========================================
   # Redis 缓存
@@ -42,8 +37,7 @@ services:
     image: redis:7-alpine
     container_name: fluent-life-redis
     restart: unless-stopped
-    command: >
-      sh -c 'redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru $${REDIS_PASSWORD:+--requirepass $$REDIS_PASSWORD}'
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
@@ -51,8 +45,7 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
-      test: >
-        sh -c 'if [ -n "$${REDIS_PASSWORD}" ]; then redis-cli -a "$${REDIS_PASSWORD}" ping; else redis-cli ping; fi'
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -85,10 +78,8 @@ services:
     ports:
       - "8081:8081"
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - postgres
+      - redis
     networks:
       - fluent-life-network
     healthcheck:
@@ -136,8 +127,7 @@ services:
     ports:
       - "8082:8082"
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     networks:
       - fluent-life-network
     healthcheck:
@@ -171,6 +161,3 @@ volumes:
 networks:
   fluent-life-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
