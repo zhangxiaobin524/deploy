@@ -1,0 +1,181 @@
+# ========================================
+# Fluent Life 全局生产环境编排
+# 用法: docker-compose up -d
+# ========================================
+
+version: '3.8'
+
+services:
+  # ========================================
+  # PostgreSQL 数据库
+  # ========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: fluent-life-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-fluent_life}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-fluent_life}
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fluent_life}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fluent-life-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+
+  # ========================================
+  # Redis 缓存
+  # ========================================
+  redis:
+    image: redis:7-alpine
+    container_name: fluent-life-redis
+    restart: unless-stopped
+    command: >
+      sh -c "
+      redis-server 
+      --appendonly yes 
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      $([ -n \"$$REDIS_PASSWORD\" ] && echo \"--requirepass $$REDIS_PASSWORD\")
+      "
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fluent-life-network
+
+  # ========================================
+  # 主后端 API
+  # ========================================
+  api:
+    build:
+      context: ../fluent-life-api
+      dockerfile: Dockerfile
+    container_name: fluent-life-api
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      PORT: "8081"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-fluent_life}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-fluent_life}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: 24h
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      GIN_MODE: release
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fluent-life-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========================================
+  # 主前端
+  # ========================================
+  frontend:
+    build:
+      context: ../fluent-life-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    container_name: fluent-life-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - fluent-life-network
+
+  # ========================================
+  # 管理后台后端
+  # ========================================
+  admin-api:
+    build:
+      context: ../fluent-life-admin-api
+      dockerfile: Dockerfile
+    container_name: fluent-life-admin-api
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      PORT: "8082"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-fluent_life}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-fluent_life}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fluent-life-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========================================
+  # 管理后台前端
+  # ========================================
+  admin-frontend:
+    build:
+      context: ../fluent-life-admin-frontend
+      dockerfile: Dockerfile
+    container_name: fluent-life-admin-frontend
+    restart: unless-stopped
+    ports:
+      - "5172:80"
+    depends_on:
+      - admin-api
+    networks:
+      - fluent-life-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  fluent-life-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
