@@ -97,6 +97,10 @@ deploy_all() {
         warn "未找到 Git 仓库，使用本地代码"
     fi
     
+    # 先停止并删除所有旧容器（避免名称冲突）
+    log "🛑 清理旧容器..."
+    docker-compose down 2>/dev/null || true
+    
     # 构建并启动
     log "🔨 构建并启动服务..."
     docker-compose pull 2>/dev/null || true
@@ -119,6 +123,16 @@ deploy_service() {
     log "🚀 部署服务: $service..."
     
     cd "$DEPLOY_DIR"
+    
+    # 检查容器是否已存在，如果存在则先停止删除
+    local container_name="fluent-life-$service"
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
+        log "🛑 停止并删除旧容器: $container_name..."
+        docker stop "$container_name" > /dev/null 2>&1 || true
+        docker rm "$container_name" > /dev/null 2>&1 || true
+    fi
+    
+    # 构建并启动服务
     docker-compose up -d --build "$service"
     
     sleep 5
