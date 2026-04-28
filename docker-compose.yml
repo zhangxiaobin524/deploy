@@ -76,7 +76,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       GIN_MODE: release
     ports:
-      - "8081:8081"
+      - "0.0.0.0:8081:8081"
     depends_on:
       - postgres
       - redis
@@ -125,7 +125,7 @@ services:
       DB_NAME: ${DB_NAME:-fluent_life}
       JWT_SECRET: ${JWT_SECRET}
     ports:
-      - "8082:8082"
+      - "0.0.0.0:8082:8082"
     depends_on:
       - postgres
     networks:
@@ -155,8 +155,10 @@ services:
 volumes:
   postgres_data:
     driver: local
+    name: fluent-life-api_postgres_data  # 使用旧卷名
   redis_data:
     driver: local
+    name: fluent-life-api_redis_data  # 使用旧卷名
 
 networks:
   fluent-life-network:
