@@ -154,11 +154,11 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-    name: fluent-life-api_postgres_data  # 使用旧卷名
+    external: true
+    name: fluent-life-api_postgres_data
   redis_data:
-    driver: local
-    name: fluent-life-api_redis_data  # 使用旧卷名
+    external: true
+    name: fluent-life-api_redis_data
 
 networks:
   fluent-life-network:
