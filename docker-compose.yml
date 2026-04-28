@@ -154,11 +154,11 @@ services:
 
 volumes:
   postgres_data:
-    external: true
-    name: fluent-life-api_postgres_data
+    external:
+      name: fluent-life-api_postgres_data
   redis_data:
-    external: true
-    name: fluent-life-api_redis_data
+    external:
+      name: fluent-life-api_redis_data
 
 networks:
   fluent-life-network:
