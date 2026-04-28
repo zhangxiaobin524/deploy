@@ -51,10 +51,17 @@ check_environment() {
     
     # 检查 .env 文件
     if [ ! -f "$DEPLOY_DIR/.env" ]; then
-        warn "未找到 .env 文件，使用 .env.example"
-        if [ -f "$DEPLOY_DIR/config/.env.example" ]; then
-            cp "$DEPLOY_DIR/config/.env.example" "$DEPLOY_DIR/.env"
-        fi
+        error "未找到 .env 文件！请先创建：\n  cp $DEPLOY_DIR/config/.env.example $DEPLOY_DIR/.env\n  然后编辑 .env 文件配置数据库密码等"
+    fi
+    
+    # 加载环境变量
+    set -a
+    source "$DEPLOY_DIR/.env"
+    set +a
+    
+    # 检查必要配置
+    if [ -z "$DB_PASSWORD" ] || [ "$DB_PASSWORD" = "your_secure_password_here" ]; then
+        error "数据库密码未配置！请编辑 $DEPLOY_DIR/.env 文件设置 DB_PASSWORD"
     fi
     
     log "✅ 环境检查通过"
@@ -81,11 +88,14 @@ deploy_all() {
     
     cd "$DEPLOY_DIR"
     
-    # 拉取最新代码
-    log "📥 拉取最新代码..."
-    cd "$PROJECT_ROOT" && git pull origin main || warn "拉取代码失败，使用本地版本"
-    
-    cd "$DEPLOY_DIR"
+    # 拉取最新代码（如果在 git 仓库中）
+    if [ -d "$PROJECT_ROOT/.git" ]; then
+        log "📥 拉取最新代码..."
+        cd "$PROJECT_ROOT" && git pull origin main 2>/dev/null || warn "拉取代码失败，使用本地版本"
+        cd "$DEPLOY_DIR"
+    else
+        warn "未找到 Git 仓库，使用本地代码"
+    fi
     
     # 构建并启动
     log "🔨 构建并启动服务..."
